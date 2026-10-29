@@ -38,6 +38,13 @@ Amounts are Turkish lira (₺1.234,56). All money is demo money: there is no pay
 
 ## Architecture
 
+![Retech Bank system architecture](docs/architecture.svg)
+
+A PNG version for slides and documents is in [`docs/architecture.png`](docs/architecture.png).
+
+<details>
+<summary>Text version</summary>
+
 ```
  Retech Bank app (Expo)                       Risk Lab (browser, WebAssembly — simulation only)
         │ HTTPS/JSON + JWT
@@ -63,6 +70,8 @@ Amounts are Turkish lira (₺1.234,56). All money is demo money: there is no pay
  │ notification-service │ ◀── Kafka events ──▶ email (Mailpit / Resend), SMS (Twilio)
  └──────────────────────┘
 ```
+
+</details>
 
 ---
 

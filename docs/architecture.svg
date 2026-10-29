@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Retech Bank — system architecture</title>
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0f766e"/>
+    </marker>
+    <style>
+      .box { fill: #ffffff; stroke: #d3dcea; stroke-width: 1.5; }
+      .name { font-size: 16px; font-weight: 700; fill: #13203f; }
+      .port { font-size: 12px; font-weight: 600; fill: #2563eb; }
+      .desc { font-size: 13px; fill: #5a6785; }
+      .label { font-size: 12px; font-weight: 600; fill: #2563eb; }
+      .rest { stroke: #2563eb; stroke-width: 2; fill: none; }
+      .kafka { stroke: #7c3aed; stroke-width: 2; stroke-dasharray: 6 4; fill: none; }
+      .data { stroke: #0f766e; stroke-width: 2; fill: none; }
+      .h2 { font-size: 14px; font-weight: 700; fill: #13203f; }
+      .legend { font-size: 13px; fill: #13203f; }
+      .soft { font-size: 13px; fill: #5a6785; }
+      .mono { font-family: 'Cascadia Code', Consolas, monospace; font-size: 12.5px; fill: #13203f; }
+    </style>
+  </defs>
+
+  <!-- Page -->
+  <rect width="1600" height="1100" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="45" y="60" font-size="30" font-weight="800" fill="#13203f">Retech Bank — system architecture</text>
+  <text x="45" y="88" class="soft" font-size="15">Spring Boot microservices · SAGA transfers · Kafka · Redis · PostgreSQL · Rust fraud engine · WebAssembly simulator</text>
+
+  <!-- ===================== Clients ===================== -->
+  <rect x="330" y="120" width="300" height="84" rx="14" fill="#eef3ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="350" y="152" class="name">Retech Bank app</text>
+  <text x="350" y="176" class="desc">Expo SDK 58 · React Native · iOS / Android</text>
+  <text x="350" y="194" class="desc">sign up · send by IBAN · confirm with code</text>
+
+  <rect x="1285" y="120" width="260" height="84" rx="14" fill="#f3efff" stroke="#654ff0" stroke-width="1.5"/>
+  <text x="1305" y="152" class="name">Risk Lab</text>
+  <text x="1475" y="152" class="port">:3000</text>
+  <text x="1305" y="176" class="desc">React + WebAssembly</text>
+  <text x="1305" y="194" class="desc">what-if simulator, no backend calls</text>
+
+  <!-- ===================== Gateway ===================== -->
+  <rect x="45" y="260" width="880" height="80" rx="14" fill="#13203f"/>
+  <text x="68" y="292" font-size="17" font-weight="700" fill="#ffffff">API Gateway</text>
+  <text x="182" y="292" font-size="13" font-weight="600" fill="#8fb0ff">:8080 — the only public port</text>
+  <text x="68" y="318" font-size="13" fill="#c9d4ec">validates JWT · strips client X-User-Id and sets the verified one · routes · rate limits (Redis) · CORS</text>
+
+  <!-- mobile -> gateway -->
+  <line x1="480" y1="204" x2="480" y2="258" class="rest" marker-end="url(#arrow-blue)"/>
+  <text x="492" y="236" class="label">HTTPS + JWT</text>
+
+  <!-- ===================== Rust risk engine ===================== -->
+  <rect x="1285" y="260" width="260" height="96" rx="14" fill="#fff4ef" stroke="#ce422b" stroke-width="1.5"/>
+  <text x="1305" y="291" class="name">risk-engine</text>
+  <text x="1475" y="291" class="port" fill="#ce422b" style="fill:#ce422b">:8086</text>
+  <text x="1305" y="314" class="desc">Rust · Axum + Tokio</text>
+  <text x="1305" y="334" class="desc">ALLOW / REVIEW / BLOCK + reasons</text>
+
+  <!-- Risk Lab <-> risk-engine: same rules -->
+  <line x1="1415" y1="204" x2="1415" y2="258" stroke="#654ff0" stroke-width="2" stroke-dasharray="3 4"/>
+  <text x="1405" y="236" font-size="12" font-weight="600" fill="#654ff0" text-anchor="end">same rules: risk-core</text>
+
+  <!-- ===================== Services ===================== -->
+  <!-- user-service -->
+  <rect x="45" y="420" width="260" height="112" rx="14" class="box"/>
+  <text x="65" y="450" class="name">user-service</text>
+  <text x="65" y="470" class="port">:8087</text>
+  <text x="65" y="494" class="desc">sign-up · log-in · JWT</text>
+  <text x="65" y="514" class="desc">BCrypt passwords</text>
+
+  <!-- account-service -->
+  <rect x="355" y="420" width="260" height="112" rx="14" class="box"/>
+  <text x="375" y="450" class="name">account-service</text>
+  <text x="375" y="470" class="port">:8081</text>
+  <text x="375" y="494" class="desc">accounts · IBANs</text>
+  <text x="375" y="514" class="desc">idempotent ledger · row locks</text>
+
+  <!-- transaction-service -->
+  <rect x="665" y="420" width="260" height="112" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+  <text x="685" y="450" class="name">transaction-service</text>
+  <text x="685" y="470" class="port">:8082</text>
+  <text x="685" y="494" class="desc">SAGA orchestrator</text>
+  <text x="685" y="514" class="desc">OTP check · recovery job</text>
+
+  <!-- fraud-detection-service -->
+  <rect x="975" y="420" width="260" height="112" rx="14" class="box"/>
+  <text x="995" y="450" class="name">fraud-detection-service</text>
+  <text x="995" y="470" class="port">:8084</text>
+  <text x="995" y="494" class="desc">velocity + usual amount</text>
+  <text x="995" y="514" class="desc">Java fallback rules</text>
+
+  <!-- notification-service -->
+  <rect x="1285" y="420" width="260" height="112" rx="14" class="box"/>
+  <text x="1305" y="450" class="name">notification-service</text>
+  <text x="1305" y="470" class="port">:8085</text>
+  <text x="1305" y="494" class="desc">email + SMS alerts</text>
+  <text x="1305" y="514" class="desc">codes never logged</text>
+
+  <!-- gateway -> user / account / transaction -->
+  <line x1="175" y1="340" x2="175" y2="418" class="rest" marker-end="url(#arrow-blue)"/>
+  <line x1="485" y1="340" x2="485" y2="418" class="rest" marker-end="url(#arrow-blue)"/>
+  <line x1="795" y1="340" x2="795" y2="418" class="rest" marker-end="url(#arrow-blue)"/>
+
+  <!-- user -> account: open account -->
+  <line x1="305" y1="476" x2="353" y2="476" class="rest" marker-end="url(#arrow-blue)"/>
+  <text x="329" y="402" class="label" text-anchor="middle">open</text>
+  <text x="329" y="415" class="label" text-anchor="middle">account</text>
+
+  <!-- transaction -> account: debit / refund -->
+  <line x1="665" y1="476" x2="617" y2="476" class="rest" marker-end="url(#arrow-blue)"/>
+  <text x="640" y="402" class="label" text-anchor="middle">debit /</text>
+  <text x="640" y="415" class="label" text-anchor="middle">refund</text>
+
+  <!-- fraud -> risk-engine: evaluate -->
+  <path d="M1105,418 L1105,308 L1283,308" class="rest" marker-end="url(#arrow-blue)"/>
+  <text x="1195" y="298" class="label" text-anchor="middle">evaluate (REST)</text>
+
+  <!-- service <-> Kafka stubs -->
+  <line x1="525" y1="534" x2="525" y2="583" class="kafka" marker-start="url(#arrow-purple)" marker-end="url(#arrow-purple)"/>
+  <line x1="835" y1="534" x2="835" y2="583" class="kafka" marker-start="url(#arrow-purple)" marker-end="url(#arrow-purple)"/>
+  <line x1="1145" y1="534" x2="1145" y2="583" class="kafka" marker-start="url(#arrow-purple)" marker-end="url(#arrow-purple)"/>
+  <line x1="1455" y1="583" x2="1455" y2="536" class="kafka" marker-end="url(#arrow-purple)"/>
+
+  <!-- ===================== Data ===================== -->
+  <!-- PostgreSQL -->
+  <rect x="45" y="690" width="880" height="150" rx="14" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+  <text x="65" y="826" font-size="15" font-weight="700" fill="#0f766e">PostgreSQL 16</text>
+  <text x="185" y="826" font-size="13" font-weight="600" fill="#0f766e">:5433 · database per service · Docker volume</text>
+
+  <!-- service -> database (centred on each cylinder; drawn before the cylinders) -->
+  <line x1="175" y1="534" x2="175" y2="730" class="data"/>
+  <line x1="485" y1="534" x2="485" y2="730" class="data"/>
+  <line x1="795" y1="534" x2="795" y2="730" class="data"/>
+
+  <!-- cylinders -->
+  <g>
+    <path d="M100,730 v46 a75,12 0 0 0 150,0 v-46" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <ellipse cx="175" cy="730" rx="75" ry="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="175" y="770" class="mono" text-anchor="middle">user_db</text>
+  </g>
+  <g>
+    <path d="M410,730 v46 a75,12 0 0 0 150,0 v-46" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <ellipse cx="485" cy="730" rx="75" ry="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="485" y="770" class="mono" text-anchor="middle">account_db</text>
+  </g>
+  <g>
+    <path d="M720,730 v46 a75,12 0 0 0 150,0 v-46" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <ellipse cx="795" cy="730" rx="75" ry="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="795" y="770" class="mono" text-anchor="middle">transaction_db</text>
+  </g>
+
+  <!-- Redis -->
+  <rect x="975" y="690" width="260" height="150" rx="14" fill="#fff1f2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="995" y="718" font-size="15" font-weight="700" fill="#b91c1c">Redis 7</text>
+  <text x="1068" y="718" font-size="13" font-weight="600" fill="#b91c1c">:6379</text>
+  <text x="995" y="744" class="desc">OTP codes (5-minute TTL)</text>
+  <text x="995" y="764" class="desc">fraud counters + verdicts</text>
+  <text x="995" y="784" class="desc">gateway rate limits</text>
+
+  <!-- fraud -> Redis, transaction -> Redis -->
+  <line x1="1065" y1="534" x2="1065" y2="688" class="data"/>
+  <path d="M925,505 L950,505 L950,760 L973,760" class="data"/>
+
+  <!-- Email / SMS -->
+  <rect x="1285" y="690" width="260" height="150" rx="14" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="1305" y="718" font-size="15" font-weight="700" fill="#a16207">Email + SMS</text>
+  <text x="1305" y="744" class="desc">Mailpit :8025 (local inbox)</text>
+  <text x="1305" y="764" class="desc">or Resend (real email)</text>
+  <text x="1305" y="784" class="desc">Twilio SMS (optional)</text>
+
+  <!-- notification -> email/SMS -->
+  <line x1="1375" y1="534" x2="1375" y2="688" class="data" marker-end="url(#arrow-teal)"/>
+
+  <!-- ===================== Kafka bus (drawn last: connections pass under it) ===================== -->
+  <rect x="45" y="585" width="1500" height="46" rx="12" fill="#f5f0ff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="65" y="614" font-size="15" font-weight="700" fill="#5b21b6">Kafka — event bus</text>
+  <text x="225" y="614" font-size="13" fill="#6d28d9">retries, then dead-letter topics (&lt;topic&gt;.DLT) · duplicate events are no-ops</text>
+
+  <!-- ===================== Legend ===================== -->
+  <line x1="45" y1="870" x2="1545" y2="870" stroke="#e6ebf3" stroke-width="1.5"/>
+
+  <text x="45" y="906" class="h2">Legend</text>
+  <line x1="45" y1="932" x2="95" y2="932" class="rest" marker-end="url(#arrow-blue)"/>
+  <text x="108" y="936" class="legend">REST (HTTP / JSON)</text>
+  <line x1="45" y1="962" x2="95" y2="962" class="kafka" marker-end="url(#arrow-purple)"/>
+  <text x="108" y="966" class="legend">Kafka event</text>
+  <line x1="45" y1="992" x2="95" y2="992" class="data"/>
+  <text x="108" y="996" class="legend">database / cache / delivery</text>
+  <line x1="45" y1="1022" x2="95" y2="1022" stroke="#654ff0" stroke-width="2" stroke-dasharray="3 4"/>
+  <text x="108" y="1026" class="legend">shared Rust code (native + WASM)</text>
+
+  <text x="420" y="906" class="h2">Event flow</text>
+  <text x="420" y="936" class="mono">transaction.initiated</text>
+  <text x="600" y="936" class="soft">→ fraud-detection-service</text>
+  <text x="420" y="962" class="mono">fraud.check.clean | verification.required | fraud.check.blocked</text>
+  <text x="917" y="962" class="soft">→ transaction-service</text>
+  <text x="420" y="988" class="mono">transaction.completed</text>
+  <text x="600" y="988" class="soft">→ account-service (credit receiver), notification-service</text>
+  <text x="420" y="1014" class="mono">transaction.otp.generated | transaction.refunded | fraud.detected</text>
+  <text x="917" y="1014" class="soft">→ notification-service</text>
+  <text x="420" y="1040" class="soft">fraud.detected also makes account-service block the account.</text>
+
+  <text x="1130" y="906" class="h2">Transfer states (SAGA)</text>
+  <text x="1130" y="936" class="mono">PENDING → PROCESSING → COMPLETED</text>
+  <text x="1130" y="962" class="mono">PROCESSING → PENDING_VERIFICATION</text>
+  <text x="1130" y="988" class="mono">→ COMPENSATING → FLAGGED (refunded)</text>
+  <text x="1130" y="1014" class="mono">FAILED: rejected, no money moved</text>
+  <text x="1130" y="1040" class="soft">Every money movement is idempotent.</text>
+
+  <text x="45" y="1078" class="soft" font-size="12">All services run with docker compose · only the gateway listens on the network · amounts in Turkish lira (₺)</text>
+</svg>
