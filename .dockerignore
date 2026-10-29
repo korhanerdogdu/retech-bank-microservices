@@ -1,0 +1,6 @@
+# Root build context is only used by risk-dashboard/Dockerfile
+**/target
+**/node_modules
+risk-dashboard/dist
+risk-dashboard/src/wasm/pkg
+.env

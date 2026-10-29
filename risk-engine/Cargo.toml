@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["risk-core", "risk-engine", "risk-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+risk-core = { path = "risk-core" }
+rust_decimal = { version = "1", default-features = false, features = ["std", "serde"] }
+rust_decimal_macros = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1

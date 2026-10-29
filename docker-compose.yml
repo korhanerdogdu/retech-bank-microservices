@@ -1,0 +1,316 @@
+# Only the API Gateway (8080) listens on all interfaces, so the Retech Bank app on a
+# phone can reach it over Wi-Fi. Everything else is bound to 127.0.0.1: reachable for
+# local debugging, but never from the network around the PC.
+
+services:
+
+  # ---------- INFRA ----------
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5433:5432"   # host 5433: a native PostgreSQL often owns 5432 on Windows
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  # Creates any missing database (database-per-service). Idempotent, so it also
+  # upgrades volumes created by earlier versions of this project.
+  db-init:
+    image: postgres:16-alpine
+    container_name: db-init
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./docker/postgres/create-databases.sh:/create-databases.sh:ro
+    entrypoint: ["sh", "/create-databases.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - banking-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  # Local inbox for every email the bank sends — http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  # ---------- RUST ----------
+
+  risk-engine:
+    build: ./risk-engine
+    image: banking/risk-engine:latest
+    container_name: risk-engine
+    ports:
+      - "127.0.0.1:8086:8086"
+    environment:
+      PORT: 8086
+      RUST_LOG: info
+      # Keep in sync with fraud.* in fraud-detection-service (used by its Java fallback)
+      RISK_MAX_TRANSACTIONS_PER_MINUTE: 5
+      RISK_SUSPICIOUS_AMOUNT_MULTIPLIER: "3.0"
+      RISK_MAX_BALANCE_PERCENTAGE: "0.90"
+      RISK_BLOCK_VELOCITY_MULTIPLIER: 2
+      RISK_BLOCK_MIN_TRIGGERED_RULES: 3
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  # Simulation only — runs risk-core as WebAssembly in the browser
+  risk-dashboard:
+    build:
+      context: .
+      dockerfile: risk-dashboard/Dockerfile
+    image: banking/risk-dashboard:latest
+    container_name: risk-dashboard
+    ports:
+      - "127.0.0.1:3000:80"
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  # ---------- APP SERVICES ----------
+
+  user-service:
+    build: ./user-service
+    image: banking/user-service:latest
+    container_name: user-service
+    ports:
+      - "127.0.0.1:8087:8087"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      ACCOUNT_SERVICE_URL: http://account-service:8081
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me-at-least-32-bytes!!}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      account-service:
+        condition: service_healthy
+    healthcheck: &spring-health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  account-service:
+    build: ./account-service
+    image: banking/account-service:latest
+    container_name: account-service
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/account_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      <<: *spring-health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP"]
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  transaction-service:
+    build: ./transaction-service
+    image: banking/transaction-service:latest
+    container_name: transaction-service
+    ports:
+      - "127.0.0.1:8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/transaction_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATA_REDIS_HOST: redis
+      ACCOUNT_SERVICE_URL: http://account-service:8081
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+    healthcheck:
+      <<: *spring-health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q UP"]
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  fraud-detection-service:
+    build: ./fraud-detection-service
+    image: banking/fraud-detection-service:latest
+    container_name: fraud-detection-service
+    ports:
+      - "127.0.0.1:8084:8084"
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      ACCOUNT_SERVICE_URL: http://account-service:8081
+      RISK_ENGINE_URL: http://risk-engine:8086
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      risk-engine:
+        condition: service_healthy
+    healthcheck:
+      <<: *spring-health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep -q UP"]
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  notification-service:
+    build: ./notification-service
+    image: banking/notification-service:latest
+    container_name: notification-service
+    ports:
+      - "127.0.0.1:8085:8085"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      ACCOUNT_SERVICE_URL: http://account-service:8081
+      # Mailpit by default; set MAIL_* in .env to send through Resend
+      SPRING_MAIL_HOST: ${MAIL_HOST:-mailpit}
+      SPRING_MAIL_PORT: ${MAIL_PORT:-1025}
+      SPRING_MAIL_USERNAME: ${MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      NOTIFICATION_EMAIL_FROM: ${MAIL_FROM:-Retech Bank <no-reply@retechbank.local>}
+      # Optional Twilio SMS — disabled while the SID is empty
+      NOTIFICATION_SMS_TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      NOTIFICATION_SMS_TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      NOTIFICATION_SMS_TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      account-service:
+        condition: service_healthy
+    healthcheck:
+      <<: *spring-health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep -q UP"]
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+  # The only public entry point: validates JWTs and routes to the services
+  api-gateway:
+    build: ./api-gateway
+    image: banking/api-gateway:latest
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      USER_SERVICE_URL: http://user-service:8087
+      ACCOUNT_SERVICE_URL: http://account-service:8081
+      TRANSACTION_SERVICE_URL: http://transaction-service:8082
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me-at-least-32-bytes!!}
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      transaction-service:
+        condition: service_healthy
+    healthcheck:
+      <<: *spring-health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+    restart: unless-stopped
+    networks:
+      - banking-network
+
+volumes:
+  postgres-data:
+
+networks:
+  banking-network:
+    driver: bridge

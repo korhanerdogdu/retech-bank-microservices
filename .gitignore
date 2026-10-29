@@ -1,0 +1,28 @@
+# Secrets: copy .env.example to .env (and mobile/.env.example to mobile/.env if needed)
+.env
+mobile/.env
+*.local
+
+# Build output
+target/
+node_modules/
+dist/
+web-build/
+.expo/
+risk-dashboard/src/wasm/pkg/
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local-only files (kept on disk, not pushed)
+CLAUDE.md
+Polished Retech Bank Risk Lab Dashboard.png

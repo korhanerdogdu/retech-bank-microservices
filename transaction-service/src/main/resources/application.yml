@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: transaction-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/transaction_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: transaction-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring:
+          deserializer:
+            value:
+              delegate:
+                class: org.springframework.kafka.support.serializer.JsonDeserializer
+          json:
+            trusted:
+              packages: "*"
+            use:
+              type:
+                headers: false
+            value:
+              default:
+                type: java.util.HashMap
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  cloud:
+    openfeign:
+      client:
+        config:
+          account-service:
+            connect-timeout: 5000
+            read-timeout: 10000
+
+server:
+  port: 8082
+
+account:
+  service:
+    url: http://localhost:8081
+
+# SAGA recovery — finishes or compensates transfers interrupted by crashes,
+# timeouts or lost events. Every step it retries is idempotent.
+transaction:
+  otp-expiry-minutes: 5
+  recovery:
+    interval-ms: 30000
+    pending-timeout-seconds: 120
+    processing-timeout-seconds: 300
+    publish-retry-seconds: 60
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

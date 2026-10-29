@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/user_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+  cloud:
+    openfeign:
+      client:
+        config:
+          account-service:
+            connect-timeout: 5000
+            read-timeout: 10000
+
+server:
+  port: 8087
+
+account:
+  service:
+    url: http://localhost:8081
+
+# Shared with the API Gateway, which validates every token. Override JWT_SECRET outside local dev.
+security:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-secret-change-me-at-least-32-bytes!!}
+    issuer: retech-bank
+    ttl-minutes: 60
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: notification-service
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: notification-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring:
+          deserializer:
+            value:
+              delegate:
+                class: org.springframework.kafka.support.serializer.JsonDeserializer
+          json:
+            trusted:
+              packages: "*"
+            use:
+              type:
+                headers: false
+            value:
+              default:
+                type: java.util.HashMap
+  # SMTP. Defaults to Mailpit (docker compose: inbox at http://localhost:8025).
+  # For Resend: host smtp.resend.com, port 587, username "resend", password = API key.
+  mail:
+    host: localhost
+    port: 1025
+    username:
+    password:
+    properties:
+      mail:
+        smtp:
+          # true for Resend (needs username/password); Mailpit accepts unauthenticated mail
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 10000
+          writetimeout: 10000
+
+server:
+  port: 8085
+
+# Contact details (email, phone) come from Account Service
+account:
+  service:
+    url: http://localhost:8081
+
+notification:
+  email:
+    enabled: true
+    from: "Retech Bank <no-reply@retechbank.local>"
+  sms:
+    # Twilio — SMS is sent only when account-sid is set and the phone is in +E.164 format
+    twilio:
+      account-sid:
+      auth-token:
+      from-number:
+
+management:
+  health:
+    # A mail outage should not mark the whole service DOWN
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info

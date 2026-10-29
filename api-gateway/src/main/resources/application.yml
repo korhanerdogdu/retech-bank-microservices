@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  cloud:
+    gateway:
+      routes:
+
+        # Sign-up, log-in, profile. Tight limit slows down password guessing.
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 10
+
+        # Account Service — read-only for clients. deduct / credit / reverse / block and
+        # account creation are internal (service-to-service) and are not routed.
+        - id: account-service
+          uri: ${ACCOUNT_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/accounts/**
+            - Method=GET
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+
+        # Transaction Service Routes
+        - id: transaction-service
+          uri: ${TRANSACTION_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/transactions/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+server:
+  port: 8080
+
+# Must match user-service
+security:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-secret-change-me-at-least-32-bytes!!}
+    issuer: retech-bank
+  # Browser origins for the Expo web build in development (localhost and private LAN addresses)
+  cors:
+    allowed-origin-patterns: >-
+      http://localhost:[*],http://127.0.0.1:[*],http://192.168.*.*:[*],http://10.*.*.*:[*]
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

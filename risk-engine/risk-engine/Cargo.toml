@@ -1,0 +1,22 @@
+[package]
+name = "risk-engine"
+description = "Fraud Risk Engine microservice (Axum + Tokio) for the Digital Banking System"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+risk-core.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
